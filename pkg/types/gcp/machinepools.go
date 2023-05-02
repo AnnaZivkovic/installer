@@ -18,6 +18,11 @@ type MachinePool struct {
 	// +optional
 	OSDisk `json:"osDisk"`
 
+	// OSImage defines a custom image for instance.
+	//
+	// +optional
+	OSImage `json:"osImage"`
+
 	// Tags defines a set of network tags which will be added to instances in the machineset
 	//
 	// +optional
@@ -65,6 +70,19 @@ type OSDisk struct {
 	EncryptionKey *EncryptionKeyReference `json:"encryptionKey,omitempty"`
 }
 
+// OSImage defines the image to use for the OS.
+type OSImage struct {
+	// ImageName defines the name of the image.
+	//
+	// +required
+	ImageName string `json:"ImageName"`
+
+	// ImageProject defines the name of the project containing the image.
+	//
+	// +required
+	ImageProject string `json:"ImageProject"`
+}
+
 // Set sets the values from `required` to `a`.
 func (a *MachinePool) Set(required *MachinePool) {
 	if required == nil || a == nil {
@@ -89,6 +107,14 @@ func (a *MachinePool) Set(required *MachinePool) {
 
 	if required.OSDisk.DiskType != "" {
 		a.OSDisk.DiskType = required.OSDisk.DiskType
+	}
+
+	if required.OSImage.ImageName != "" {
+		a.OSImage.ImageName = required.OSImage.ImageName
+	}
+
+	if required.OSImage.ImageProject != "" {
+		a.OSImage.ImageProject = required.OSImage.ImageProject
 	}
 
 	if required.EncryptionKey != nil {

@@ -135,6 +135,8 @@ func provider(clusterID string, platform *gcp.Platform, mpool *gcp.MachinePool, 
 
 	if len(platform.Licenses) > 0 {
 		osImage = fmt.Sprintf("%s-rhcos-image", clusterID)
+	} else if mpool.OSImage.ImageName != "" {
+		osImage = fmt.Sprintf("projects/%s/global/images/%s", mpool.OSImage.ImageProject, mpool.OSImage.ImageName)
 	}
 	network, subnetwork, err := getNetworks(platform, clusterID, role)
 	if err != nil {

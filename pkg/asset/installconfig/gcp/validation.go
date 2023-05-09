@@ -44,9 +44,11 @@ func Validate(client API, ic *types.InstallConfig) error {
 	allErrs = append(allErrs, validateProject(client, ic, field.NewPath("platform").Child("gcp"))...)
 	allErrs = append(allErrs, validateNetworkProject(client, ic, field.NewPath("platform").Child("gcp"))...)
 	allErrs = append(allErrs, validateRegion(client, ic, field.NewPath("platform").Child("gcp"))...)
+	allErrs = append(allErrs, validateZones(client, ic)...)
 	allErrs = append(allErrs, validateNetworks(client, ic, field.NewPath("platform").Child("gcp"))...)
 	allErrs = append(allErrs, validateInstanceTypes(client, ic)...)
 	allErrs = append(allErrs, validateCredentialMode(client, ic)...)
+	allErrs = append(allErrs, validateMarketplaceImages(client, ic)...)
 
 	return allErrs.ToAggregate()
 }
@@ -330,6 +332,88 @@ func validateCredentialMode(client API, ic *types.InstallConfig) field.ErrorList
 			if ic.CredentialsMode != "" && ic.CredentialsMode != types.ManualCredentialsMode {
 				errMsg := "environmental authentication is only supported with Manual credentials mode"
 				return append(allErrs, field.Forbidden(field.NewPath("credentialsMode"), errMsg))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+func validateZones(client API, ic *types.InstallConfig) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	zones, err := client.GetZones(context.TODO(), ic.GCP.ProjectID, fmt.Sprintf("region eq .*%s", ic.GCP.Region))
+	if err != nil {
+		return append(allErrs, field.InternalError(nil, err))
+	} else if len(zones) == 0 {
+		return append(allErrs, field.InternalError(nil, fmt.Errorf("failed to fetch zones, this error usually occurs if the region is not found")))
+	}
+
+	projZones := sets.New[string]()
+	for _, zone := range zones {
+		projZones.Insert(zone.Name)
+	}
+
+	const errMsg = "zone(s) not found in region"
+
+	if ic.Platform.GCP.DefaultMachinePlatform != nil {
+		diff := sets.New(ic.Platform.GCP.DefaultMachinePlatform.Zones...).Difference(projZones)
+		if len(diff) > 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("platform", "gcp", "defaultMachinePlatform", "zones"), sets.List(diff), errMsg))
+		}
+	}
+
+	if ic.ControlPlane != nil && ic.ControlPlane.Platform.GCP != nil {
+		diff := sets.New(ic.ControlPlane.Platform.GCP.Zones...).Difference(projZones)
+		if len(diff) > 0 {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("controlPlane", "platform", "gcp", "zones"), sets.List(diff), errMsg))
+		}
+	}
+
+	for idx, compute := range ic.Compute {
+		fldPath := field.NewPath("compute").Index(idx)
+		if compute.Platform.GCP != nil {
+			diff := sets.New(compute.Platform.GCP.Zones...).Difference(projZones)
+			if len(diff) > 0 {
+				allErrs = append(allErrs, field.Invalid(fldPath.Child("platform", "gcp", "zones"), sets.List(diff), errMsg))
+			}
+		}
+	}
+
+	return allErrs
+}
+
+func validateMarketplaceImages(client API, ic *types.InstallConfig) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	const errorMessage string = "could not find the boot image: %v"
+
+	if ic.GCP.DefaultMachinePlatform != nil && ic.GCP.DefaultMachinePlatform.OSImage.ImageName != "" {
+		osImage := ic.GCP.DefaultMachinePlatform.OSImage
+		_, err := client.GetImage(context.TODO(), osImage.ImageName, osImage.ImageProject)
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("platform", "gcp", "defaultMachinePlatform", "osImage"), osImage, fmt.Sprintf(errorMessage, err)))
+		}
+	}
+
+	if ic.ControlPlane != nil && ic.ControlPlane.Platform.GCP != nil && ic.ControlPlane.Platform.GCP.OSImage.ImageName != "" {
+		osImage := ic.ControlPlane.Platform.GCP.OSImage
+		_, err := client.GetImage(context.TODO(), osImage.ImageName, osImage.ImageProject)
+		if err != nil {
+			allErrs = append(allErrs, field.Invalid(field.NewPath("controlPlane", "platform", "gcp", "osImage"), osImage, fmt.Sprintf(errorMessage, err)))
+		}
+	}
+
+	for idx, compute := range ic.Compute {
+		if compute.Platform.GCP == nil {
+			continue
+		}
+		fieldPath := field.NewPath("compute").Index(idx)
+		osImage := compute.Platform.GCP.OSImage
+		if osImage.ImageName != "" {
+			_, err := client.GetImage(context.TODO(), osImage.ImageProject, osImage.ImageName)
+			if err != nil {
+				allErrs = append(allErrs, field.Invalid(fieldPath.Child("platform", "gcp", "osImage"), osImage, fmt.Sprintf(errorMessage, err)))
 			}
 		}
 	}

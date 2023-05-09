@@ -215,6 +215,11 @@
               "image": "ami-0be51b7bb4993f9f9"
             }
           }
+        },
+        "gcp": {
+          "release": "414.92.202304131328-0",
+          "project": "openshift-dev-installer",
+          "name": "tzivkovi-rhcos-arm-image"
         }
       },
       "rhel-coreos-extensions": {

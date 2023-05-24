@@ -274,7 +274,7 @@ func (m *Master) Generate(dependencies asset.Parents) error {
 			if err != nil {
 				return errors.Wrap(err, "failed to fetch availability zones")
 			}
-			mpool.Zones = azs
+			mpool.Zones = azs[:1]
 		}
 		pool.Platform.GCP = &mpool
 		machines, controlPlaneMachineSet, err = gcp.Machines(clusterID.InfraID, ic, &pool, string(*rhcosImage), "master", masterUserDataSecretName)

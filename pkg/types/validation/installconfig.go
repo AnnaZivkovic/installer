@@ -107,7 +107,7 @@ func ValidateInstallConfig(c *types.InstallConfig, usingAgentMethod bool) field.
 		}
 	}
 	if c.Networking != nil {
-		allErrs = append(allErrs, validateNetworking(c.Networking, c.IsSingleNodeOpenShift(), field.NewPath("networking"))...)
+		allErrs = append(allErrs, validateNetworking(c.Networking, c.ControlPlane, field.NewPath("networking"))...)
 		allErrs = append(allErrs, validateNetworkingIPVersion(c.Networking, &c.Platform)...)
 		allErrs = append(allErrs, validateNetworkingForPlatform(c.Networking, &c.Platform, field.NewPath("networking"))...)
 		allErrs = append(allErrs, validateNetworkingClusterNetworkMTU(c, field.NewPath("networking", "clusterNetworkMTU"))...)
@@ -366,7 +366,7 @@ func validateNetworkingIPVersion(n *types.Networking, p *types.Platform) field.E
 	return allErrs
 }
 
-func validateNetworking(n *types.Networking, singleNodeOpenShift bool, fldPath *field.Path) field.ErrorList {
+func validateNetworking(n *types.Networking, controlPlane *types.MachinePool, fldPath *field.Path) field.ErrorList {
 	allErrs := field.ErrorList{}
 	if n.NetworkType == "" {
 		allErrs = append(allErrs, field.Required(fldPath.Child("networkType"), "network provider type required"))
@@ -378,7 +378,7 @@ func validateNetworking(n *types.Networking, singleNodeOpenShift bool, fldPath *
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("networkType"), n.NetworkType, "networkType Kuryr is not supported on OpenShift later than 4.14"))
 	}
 
-	if n.NetworkType == string(operv1.NetworkTypeOpenShiftSDN) {
+	if n.NetworkType == string(operv1.NetworkTypeOpenShiftSDN) && controlPlane.Architecture != types.ArchitecturePPC64LE {
 		allErrs = append(allErrs, field.Invalid(fldPath.Child("networkType"), n.NetworkType, "networkType OpenShiftSDN is deprecated, please use OVNKubernetes"))
 	}
 
